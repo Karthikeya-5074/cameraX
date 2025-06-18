@@ -82,7 +82,6 @@ private fun loadMedia(context: Context): List<GalleryItem> {
 
     return items
 }
-
 @Composable
 fun GalleryScreen(navController: NavController) {
     val context = LocalContext.current
@@ -113,6 +112,7 @@ fun GalleryScreen(navController: NavController) {
     var selectedItem by remember { mutableStateOf<GalleryItem?>(null) }
     val items = remember(hasPermission) { if (hasPermission) loadMedia(context) else emptyList() }
 
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(128.dp),
@@ -128,6 +128,7 @@ fun GalleryScreen(navController: NavController) {
                     if (!item.isVideo) {
                         AsyncImage(
                             model = item.uri,
+
                             contentDescription = null,
                             modifier = Modifier
                                 .size(120.dp)
@@ -151,12 +152,11 @@ fun GalleryScreen(navController: NavController) {
         IconButton(onClick = { navController.navigateUp() }, modifier = Modifier.align(Alignment.TopStart)) {
             Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
         }
-
-        selectedItem?.let { item ->
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(Color.Black)
+
                     .clickable { selectedItem = null },
                 contentAlignment = Alignment.Center
             ) {
@@ -166,6 +166,7 @@ fun GalleryScreen(navController: NavController) {
                     AndroidView(factory = {
                         VideoView(it).apply {
                             setVideoURI(item.uri)
+
                             setOnPreparedListener { mp ->
                                 mp.isLooping = true
                                 start()
