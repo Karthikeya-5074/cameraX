@@ -3,11 +3,11 @@ package com.shabeer.camerax.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Environment
+import android.provider.MediaStore
+import android.content.ContentUris
 import android.widget.VideoView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -32,51 +32,103 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import java.io.File
+import android.content.Context
 
+data class GalleryItem(val uri: Uri, val name: String, val isVideo: Boolean)
+
+private fun loadMedia(context: Context): List<GalleryItem> {
+    val items = mutableListOf<GalleryItem>()
+    val projection = arrayOf(
+        MediaStore.MediaColumns._ID,
+        MediaStore.MediaColumns.DISPLAY_NAME
+    )
+    val selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=?"
+    val selectionArgs = arrayOf("DCIM/SmartCameraX/")
+    val sortOrder = "${MediaStore.MediaColumns.DATE_MODIFIED} DESC"
+
+    context.contentResolver.query(
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+        projection,
+        selection,
+        selectionArgs,
+        sortOrder
+    )?.use { cursor ->
+        val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+        val nameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+        while (cursor.moveToNext()) {
+            val id = cursor.getLong(idCol)
+            val name = cursor.getString(nameCol)
+            val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+            items.add(GalleryItem(uri, name, false))
+        }
+    }
+
+    context.contentResolver.query(
+        MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+        projection,
+        selection,
+        selectionArgs,
+        sortOrder
+    )?.use { cursor ->
+        val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+        val nameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+        while (cursor.moveToNext()) {
+            val id = cursor.getLong(idCol)
+            val name = cursor.getString(nameCol)
+            val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+            items.add(GalleryItem(uri, name, true))
+        }
+    }
+
+    return items
+}
 @Composable
 fun GalleryScreen(navController: NavController) {
     val context = LocalContext.current
+    val requiredPermissions = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+    } else {
+        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
     var hasPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
-        )
+        mutableStateOf(requiredPermissions.all {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        })
     }
+
     val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasPermission = granted
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        hasPermission = result.all { it.value }
     }
+
     LaunchedEffect(Unit) {
         if (!hasPermission) {
-            launcher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+            launcher.launch(requiredPermissions)
         }
     }
-    val mediaDir = remember {
-        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
-            .resolve("SmartCameraX")
-    }
-    var selectedFile by remember { mutableStateOf<File?>(null) }
-    val files = remember(hasPermission) {
-        if (hasPermission) mediaDir.listFiles()?.sortedByDescending { it.lastModified() }
-            ?: emptyArray() else emptyArray()
-    }
+
+    var selectedItem by remember { mutableStateOf<GalleryItem?>(null) }
+    val items = remember(hasPermission) { if (hasPermission) loadMedia(context) else emptyList() }
+
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(128.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(files) { file ->
+            items(items) { item ->
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(4.dp).clickable { selectedFile = file }
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .clickable { selectedItem = item }
                 ) {
-                    if (file.extension.lowercase() in listOf("jpg", "jpeg", "png")) {
+                    if (!item.isVideo) {
                         AsyncImage(
-                            model = file,
+                            model = item.uri,
+
                             contentDescription = null,
                             modifier = Modifier
                                 .size(120.dp)
@@ -92,27 +144,29 @@ fun GalleryScreen(navController: NavController) {
                             Icon(Icons.Default.Videocam, contentDescription = null, tint = Color.White)
                         }
                     }
-                    Text(file.name, color = Color.White, fontSize = 12.sp)
+                    Text(item.name, color = Color.White, fontSize = 12.sp)
                 }
             }
         }
+
         IconButton(onClick = { navController.navigateUp() }, modifier = Modifier.align(Alignment.TopStart)) {
             Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
         }
-        selectedFile?.let { file ->
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(Color.Black)
-                    .clickable { selectedFile = null },
+
+                    .clickable { selectedItem = null },
                 contentAlignment = Alignment.Center
             ) {
-                if (file.extension.lowercase() in listOf("jpg", "jpeg", "png")) {
-                    AsyncImage(model = file, contentDescription = null, modifier = Modifier.fillMaxSize())
+                if (!item.isVideo) {
+                    AsyncImage(model = item.uri, contentDescription = null, modifier = Modifier.fillMaxSize())
                 } else {
                     AndroidView(factory = {
                         VideoView(it).apply {
-                            setVideoURI(Uri.fromFile(file))
+                            setVideoURI(item.uri)
+
                             setOnPreparedListener { mp ->
                                 mp.isLooping = true
                                 start()

@@ -20,7 +20,7 @@ import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
-import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.MediaStoreOutputOptions
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,6 +35,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import android.os.Environment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -87,7 +88,9 @@ enum class Mode {
 fun createFile(context: Context, extension: String): File {
     val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
     val fileName = "CAMERA_${timeStamp}.$extension"
-    val outputDir = context.cacheDir
+    val outputDir =
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
+            .resolve("SmartCameraX").apply { mkdirs() }
     return File(outputDir, fileName)
 }
 
@@ -316,8 +319,15 @@ fun CameraApp(cameraExecutor: ExecutorService, navController: NavController) {
                 } else {
                     videoCapture?.let { capture ->
                         if (!isRecording) {
-                            val videoFile = createFile(context, "mp4")
-                            val mediaStoreOutput = FileOutputOptions.Builder(videoFile).build()
+                            val contentValues = android.content.ContentValues().apply {
+                                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "VID_${'$'}{System.currentTimeMillis()}")
+                                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+                                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/SmartCameraX")
+                            }
+                            val mediaStoreOutput = MediaStoreOutputOptions.Builder(
+                                context.contentResolver,
+                                android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                            ).setContentValues(contentValues).build()
                             recording = capture.output.prepareRecording(context, mediaStoreOutput)
                                 .start(ContextCompat.getMainExecutor(context)) {
                                     when (it) {
