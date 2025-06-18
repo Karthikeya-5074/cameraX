@@ -23,11 +23,14 @@ import androidx.camera.video.*
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +42,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavController
 import com.google.common.util.concurrent.ListenableFuture
+import com.shabeer.camerax.ui.GalleryScreen
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -54,9 +62,13 @@ class MainActivity : ComponentActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         setContent {
+            val navController = rememberNavController()
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    CameraApp(cameraExecutor)
+                    NavHost(navController = navController, startDestination = "camera") {
+                        composable("camera") { CameraApp(cameraExecutor, navController) }
+                        composable("gallery") { GalleryScreen(navController) }
+                    }
                 }
             }
         }
@@ -80,7 +92,7 @@ fun createFile(context: Context, extension: String): File {
 }
 
 @Composable
-fun CameraApp(cameraExecutor: ExecutorService) {
+fun CameraApp(cameraExecutor: ExecutorService, navController: NavController) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
@@ -150,13 +162,28 @@ fun CameraApp(cameraExecutor: ExecutorService) {
         Text("Smart Camera", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(modifier = Modifier.height(8.dp))
 
-        AndroidView(
-            factory = { previewView },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(400.dp)
-                .background(Color.DarkGray, shape = RoundedCornerShape(12.dp))
-        )
+        Box(modifier = Modifier
+            .fillMaxWidth()
+            .height(400.dp)) {
+            AndroidView(
+                factory = { previewView },
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.DarkGray, shape = RoundedCornerShape(12.dp))
+            )
+            IconButton(
+                onClick = { navController.navigate("gallery") },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PhotoLibrary,
+                    contentDescription = "Gallery",
+                    tint = Color.White
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
