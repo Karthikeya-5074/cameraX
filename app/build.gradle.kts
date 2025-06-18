@@ -63,4 +63,6 @@ dependencies {
     implementation("androidx.camera:camera-extensions:1.3.2")
     implementation("androidx.compose.material:material-icons-core:1.5.0")
     implementation("androidx.compose.material:material-icons-extended:1.5.0")
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }
